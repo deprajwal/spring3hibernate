@@ -5,7 +5,6 @@ pipeline {
     }
 
     parameters {
-
         booleanParam(
             name: 'SKIP_STABILITY',
             defaultValue: false,
@@ -26,18 +25,14 @@ pipeline {
     }
 
     environment {
-
         JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-amd64'
-
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
     stages {
 
         stage('Code Checkout') {
-
             steps {
-
                 echo 'Checking out source code...'
 
                 checkout scm
@@ -52,13 +47,11 @@ pipeline {
             }
         }
 
-
         stage('Parallel Code Scans') {
 
             parallel {
 
                 stage('Code Stability') {
-
                     when {
                         expression {
                             return !params.SKIP_STABILITY
@@ -66,7 +59,6 @@ pipeline {
                     }
 
                     steps {
-
                         dir('stability') {
 
                             deleteDir()
@@ -90,9 +82,7 @@ pipeline {
                     }
                 }
 
-
                 stage('Code Quality') {
-
                     when {
                         expression {
                             return !params.SKIP_QUALITY
@@ -100,7 +90,6 @@ pipeline {
                     }
 
                     steps {
-
                         dir('quality') {
 
                             deleteDir()
@@ -150,9 +139,7 @@ pipeline {
                     }
                 }
 
-
                 stage('Code Coverage') {
-
                     when {
                         expression {
                             return !params.SKIP_COVERAGE
@@ -160,7 +147,6 @@ pipeline {
                     }
 
                     steps {
-
                         dir('coverage') {
 
                             deleteDir()
@@ -189,9 +175,7 @@ pipeline {
             }
         }
 
-
         stage('Generate Reports') {
-
             steps {
 
                 echo 'Generating reports...'
@@ -227,9 +211,7 @@ pipeline {
             }
         }
 
-
         stage('Approval for Publication') {
-
             steps {
 
                 echo 'Waiting for approval before publishing artifact...'
@@ -243,9 +225,7 @@ pipeline {
             }
         }
 
-
         stage('Publish Artifacts') {
-
             steps {
 
                 dir('coverage') {
@@ -269,49 +249,53 @@ pipeline {
         }
     }
 
-    
     post {
-    success {
-        echo '========================================'
-        echo 'PIPELINE SUCCESS'
-        echo 'Artifact published successfully.'
-        echo '========================================'
 
-        emailext(
-            to: 'prajwaldekate6@gmail.com',
-            subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-            body: """Build successful.
+        success {
+
+            echo '========================================'
+            echo 'PIPELINE SUCCESS'
+            echo 'Artifact published successfully.'
+            echo '========================================'
+
+            emailext(
+                to: 'prajwaldekate6@gmail.com',
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """Build successful.
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Artifact: WAR published successfully.
 Build URL: ${env.BUILD_URL}
 """
-        )
-    }
+            )
+        }
 
-    failure {
-        echo '========================================'
-        echo 'PIPELINE FAILED'
-        echo 'Please check Jenkins console output.'
-        echo '========================================'
+        failure {
 
-        emailext(
-            to: 'prajwaldekate6@gmail.com',
-            subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-            body: """Build failed.
+            echo '========================================'
+            echo 'PIPELINE FAILED'
+            echo 'Please check Jenkins console output.'
+            echo '========================================'
+
+            emailext(
+                to: 'prajwaldekate6@gmail.com',
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """Build failed.
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Please check Jenkins console output.
 Build URL: ${env.BUILD_URL}
 """
-        )
-    }
+            )
+        }
 
-    aborted {
-        echo '========================================'
-        echo 'PIPELINE ABORTED'
-        echo '========================================'
+        aborted {
+
+            echo '========================================'
+            echo 'PIPELINE ABORTED'
+            echo '========================================'
+        }
     }
 }
