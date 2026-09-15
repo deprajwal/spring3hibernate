@@ -39,6 +39,10 @@ node('assignment-4-agent') {
             def parallelStages = [:]
 
 
+            /*
+             * CODE STABILITY
+             * Checkstyle
+             */
             if (!params.SKIP_STABILITY) {
 
                 parallelStages['Code Stability'] = {
@@ -69,6 +73,10 @@ node('assignment-4-agent') {
             }
 
 
+            /*
+             * CODE QUALITY
+             * SonarQube
+             */
             if (!params.SKIP_QUALITY) {
 
                 parallelStages['Code Quality'] = {
@@ -107,6 +115,10 @@ node('assignment-4-agent') {
             }
 
 
+            /*
+             * CODE COVERAGE
+             * JaCoCo
+             */
             if (!params.SKIP_COVERAGE) {
 
                 parallelStages['Code Coverage'] = {
@@ -140,23 +152,41 @@ node('assignment-4-agent') {
             }
 
 
+            /*
+             * Make sure at least one scan is enabled
+             */
             if (parallelStages.isEmpty()) {
+
                 error('At least one code scan must be enabled.')
             }
 
+            /*
+             * Run scans in parallel
+             */
             parallel parallelStages
         }
 
 
+        /*
+         * GENERATE REPORTS
+         */
         stage('Generate Reports') {
 
             echo 'Generating reports...'
 
+
+            /*
+             * JUnit Test Report
+             */
             junit(
                 testResults: 'target/surefire-reports/*.xml',
                 allowEmptyResults: true
             )
 
+
+            /*
+             * Checkstyle HTML Report
+             */
             publishHTML(
                 target: [
                     allowMissing: true,
@@ -168,6 +198,10 @@ node('assignment-4-agent') {
                 ]
             )
 
+
+            /*
+             * JaCoCo HTML Report
+             */
             publishHTML(
                 target: [
                     allowMissing: true,
@@ -183,6 +217,9 @@ node('assignment-4-agent') {
         }
 
 
+        /*
+         * APPROVAL BEFORE PUBLICATION
+         */
         stage('Approval for Publication') {
 
             echo 'Waiting for approval before publishing artifact...'
@@ -196,6 +233,9 @@ node('assignment-4-agent') {
         }
 
 
+        /*
+         * PUBLISH ARTIFACT
+         */
         stage('Publish Artifacts') {
 
             echo 'Building WAR artifact...'
@@ -221,12 +261,18 @@ node('assignment-4-agent') {
         }
 
 
+        /*
+         * SUCCESS MESSAGE
+         */
         echo '========================================'
         echo 'PIPELINE SUCCESS'
         echo 'Artifact published successfully.'
         echo '========================================'
 
 
+        /*
+         * EMAIL SUCCESS NOTIFICATION
+         */
         emailext(
             to: 'prajwaldekate6@gmail.com',
             subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -240,13 +286,31 @@ Build URL: ${env.BUILD_URL}
         )
 
 
+        /*
+         * SLACK SUCCESS NOTIFICATION
+         */
+        slackSend(
+            channel: '#jenkins-notifications',
+            color: 'good',
+            message: """SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+Artifact published successfully.
+Build URL: ${env.BUILD_URL}"""
+        )
+
+
     } catch (err) {
 
+        /*
+         * FAILURE / ABORT MESSAGE
+         */
         echo '========================================'
         echo 'PIPELINE FAILED OR ABORTED'
         echo '========================================'
 
 
+        /*
+         * EMAIL FAILURE NOTIFICATION
+         */
         emailext(
             to: 'prajwaldekate6@gmail.com',
             subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -260,6 +324,21 @@ Build URL: ${env.BUILD_URL}
         )
 
 
+        /*
+         * SLACK FAILURE NOTIFICATION
+         */
+        slackSend(
+            channel: '#jenkins-notifications',
+            color: 'danger',
+            message: """FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+Build failed or was aborted.
+Build URL: ${env.BUILD_URL}"""
+        )
+
+
+        /*
+         * Keep original Jenkins build status
+         */
         throw err
     }
 }
