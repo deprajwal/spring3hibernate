@@ -33,9 +33,11 @@ node('assignment-4-agent') {
             echo 'Source code checkout completed.'
         }
 
+
         stage('Parallel Code Scans') {
 
             def parallelStages = [:]
+
 
             if (!params.SKIP_STABILITY) {
 
@@ -45,20 +47,27 @@ node('assignment-4-agent') {
 
                         echo 'Running Code Stability Scan using Checkstyle...'
 
-                        sh '''
-                            echo "Java version:"
-                            java -version
+                        withEnv([
+                            'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64',
+                            "PATH=/usr/lib/jvm/java-11-openjdk-amd64/bin:${env.PATH}"
+                        ]) {
 
-                            echo "Maven version:"
-                            mvn -version
+                            sh '''
+                                echo "Java version:"
+                                java -version
 
-                            mvn checkstyle:checkstyle
-                        '''
+                                echo "Maven version:"
+                                mvn -version
+
+                                mvn checkstyle:checkstyle
+                            '''
+                        }
 
                         echo 'Code Stability Scan completed.'
                     }
                 }
             }
+
 
             if (!params.SKIP_QUALITY) {
 
@@ -97,6 +106,7 @@ node('assignment-4-agent') {
                 }
             }
 
+
             if (!params.SKIP_COVERAGE) {
 
                 parallelStages['Code Coverage'] = {
@@ -105,23 +115,30 @@ node('assignment-4-agent') {
 
                         echo 'Running Code Coverage Analysis using JaCoCo...'
 
-                        sh '''
-                            echo "Java version:"
-                            java -version
+                        withEnv([
+                            'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64',
+                            "PATH=/usr/lib/jvm/java-11-openjdk-amd64/bin:${env.PATH}"
+                        ]) {
 
-                            echo "Maven version:"
-                            mvn -version
+                            sh '''
+                                echo "Java version:"
+                                java -version
 
-                            mvn clean \
-                            org.jacoco:jacoco-maven-plugin:0.8.13:prepare-agent \
-                            test \
-                            org.jacoco:jacoco-maven-plugin:0.8.13:report
-                        '''
+                                echo "Maven version:"
+                                mvn -version
+
+                                mvn clean \
+                                org.jacoco:jacoco-maven-plugin:0.8.13:prepare-agent \
+                                test \
+                                org.jacoco:jacoco-maven-plugin:0.8.13:report
+                            '''
+                        }
 
                         echo 'Code Coverage Analysis completed.'
                     }
                 }
             }
+
 
             if (parallelStages.isEmpty()) {
                 error('At least one code scan must be enabled.')
@@ -129,6 +146,7 @@ node('assignment-4-agent') {
 
             parallel parallelStages
         }
+
 
         stage('Generate Reports') {
 
@@ -164,6 +182,7 @@ node('assignment-4-agent') {
             echo 'Reports generated successfully.'
         }
 
+
         stage('Approval for Publication') {
 
             echo 'Waiting for approval before publishing artifact...'
@@ -176,13 +195,20 @@ node('assignment-4-agent') {
             echo 'Artifact publication approved.'
         }
 
+
         stage('Publish Artifacts') {
 
             echo 'Building WAR artifact...'
 
-            sh '''
-                mvn package -DskipTests
-            '''
+            withEnv([
+                'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64',
+                "PATH=/usr/lib/jvm/java-11-openjdk-amd64/bin:${env.PATH}"
+            ]) {
+
+                sh '''
+                    mvn package -DskipTests
+                '''
+            }
 
             echo 'Publishing WAR artifact...'
 
@@ -194,10 +220,12 @@ node('assignment-4-agent') {
             echo 'Artifact published successfully.'
         }
 
+
         echo '========================================'
         echo 'PIPELINE SUCCESS'
         echo 'Artifact published successfully.'
         echo '========================================'
+
 
         emailext(
             to: 'prajwaldekate6@gmail.com',
@@ -211,11 +239,13 @@ Build URL: ${env.BUILD_URL}
 """
         )
 
+
     } catch (err) {
 
         echo '========================================'
         echo 'PIPELINE FAILED OR ABORTED'
         echo '========================================'
+
 
         emailext(
             to: 'prajwaldekate6@gmail.com',
@@ -228,6 +258,7 @@ Please check Jenkins console output.
 Build URL: ${env.BUILD_URL}
 """
         )
+
 
         throw err
     }
