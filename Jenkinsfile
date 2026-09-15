@@ -34,10 +34,6 @@ pipeline {
 
     stages {
 
-        // ============================================================
-        // 1. CODE CHECKOUT
-        // ============================================================
-
         stage('Code Checkout') {
 
             steps {
@@ -57,22 +53,13 @@ pipeline {
         }
 
 
-        // ============================================================
-        // 2. PARALLEL CODE SCANS
-        // ============================================================
-
         stage('Parallel Code Scans') {
 
             parallel {
 
-                // ----------------------------------------------------
-                // CODE STABILITY - CHECKSTYLE
-                // ----------------------------------------------------
-
                 stage('Code Stability') {
 
                     when {
-
                         expression {
                             return !params.SKIP_STABILITY
                         }
@@ -104,14 +91,9 @@ pipeline {
                 }
 
 
-                // ----------------------------------------------------
-                // CODE QUALITY - SONARQUBE
-                // ----------------------------------------------------
-
                 stage('Code Quality') {
 
                     when {
-
                         expression {
                             return !params.SKIP_QUALITY
                         }
@@ -128,14 +110,20 @@ pipeline {
                             echo 'Running Code Quality Analysis using SonarQube...'
 
                             /*
-                             * Java 11 is used here because the project
-                             * contains an old FindBugs plugin which has
-                             * compatibility issues with Java 21.
+                             * SonarQube Scanner requires Java 17+.
+                             * Java 21 is used for SonarQube.
+                             *
+                             * The project contains an old FindBugs
+                             * 3.0.5 plugin which is not compatible with
+                             * modern Java versions.
+                             *
+                             * Therefore FindBugs is skipped only during
+                             * the SonarQube analysis.
                              */
 
                             withEnv([
-                                'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64',
-                                "PATH=/usr/lib/jvm/java-11-openjdk-amd64/bin:${env.PATH}"
+                                'JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64',
+                                "PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:${env.PATH}"
                             ]) {
 
                                 withSonarQubeEnv('SonarQube') {
@@ -148,6 +136,7 @@ pipeline {
                                         mvn -version
 
                                         mvn -DskipTests \
+                                        -Dfindbugs.skip=true \
                                         compile \
                                         org.sonarsource.scanner.maven:sonar-maven-plugin:3.10.0.2594:sonar \
                                         -Dsonar.projectKey=spring3hibernate \
@@ -162,14 +151,9 @@ pipeline {
                 }
 
 
-                // ----------------------------------------------------
-                // CODE COVERAGE - JACOCO
-                // ----------------------------------------------------
-
                 stage('Code Coverage') {
 
                     when {
-
                         expression {
                             return !params.SKIP_COVERAGE
                         }
@@ -206,30 +190,16 @@ pipeline {
         }
 
 
-        // ============================================================
-        // 3. GENERATE REPORTS
-        // ============================================================
-
         stage('Generate Reports') {
 
             steps {
 
                 echo 'Generating reports...'
 
-
-                // ----------------------------------------------------
-                // JUNIT TEST REPORT
-                // ----------------------------------------------------
-
                 junit(
                     testResults: 'coverage/target/surefire-reports/*.xml',
                     allowEmptyResults: true
                 )
-
-
-                // ----------------------------------------------------
-                // CHECKSTYLE REPORT
-                // ----------------------------------------------------
 
                 publishHTML(
                     target: [
@@ -241,11 +211,6 @@ pipeline {
                         reportName: 'Checkstyle Report'
                     ]
                 )
-
-
-                // ----------------------------------------------------
-                // JACOCO REPORT
-                // ----------------------------------------------------
 
                 publishHTML(
                     target: [
@@ -263,10 +228,6 @@ pipeline {
         }
 
 
-        // ============================================================
-        // 4. APPROVAL BEFORE PUBLICATION
-        // ============================================================
-
         stage('Approval for Publication') {
 
             steps {
@@ -282,10 +243,6 @@ pipeline {
             }
         }
 
-
-        // ============================================================
-        // 5. PUBLISH ARTIFACT
-        // ============================================================
 
         stage('Publish Artifacts') {
 
@@ -313,10 +270,6 @@ pipeline {
     }
 
 
-    // ================================================================
-    // POST BUILD ACTIONS
-    // ================================================================
-
     post {
 
         success {
@@ -325,16 +278,7 @@ pipeline {
             echo 'PIPELINE SUCCESS'
             echo 'Artifact published successfully.'
             echo '========================================'
-
-            /*
-             * Slack notification will be configured later.
-             */
-
-            /*
-             * Email notification will be configured later.
-             */
         }
-
 
         failure {
 
@@ -342,16 +286,7 @@ pipeline {
             echo 'PIPELINE FAILED'
             echo 'Please check Jenkins console output.'
             echo '========================================'
-
-            /*
-             * Slack notification will be configured later.
-             */
-
-            /*
-             * Email notification will be configured later.
-             */
         }
-
 
         aborted {
 
