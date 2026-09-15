@@ -1,301 +1,234 @@
-pipeline {
+node('assignment-4-agent') {
 
-    agent {
-        label 'assignment-4-agent'
-    }
+    properties([
+        parameters([
+            booleanParam(
+                name: 'SKIP_STABILITY',
+                defaultValue: false,
+                description: 'Skip Code Stability Scan (Checkstyle)'
+            ),
+            booleanParam(
+                name: 'SKIP_QUALITY',
+                defaultValue: false,
+                description: 'Skip Code Quality Analysis (SonarQube)'
+            ),
+            booleanParam(
+                name: 'SKIP_COVERAGE',
+                defaultValue: false,
+                description: 'Skip Code Coverage Analysis (JaCoCo)'
+            )
+        ])
+    ])
 
-    parameters {
-        booleanParam(
-            name: 'SKIP_STABILITY',
-            defaultValue: false,
-            description: 'Skip Code Stability Scan (Checkstyle)'
-        )
-
-        booleanParam(
-            name: 'SKIP_QUALITY',
-            defaultValue: false,
-            description: 'Skip Code Quality Analysis (SonarQube)'
-        )
-
-        booleanParam(
-            name: 'SKIP_COVERAGE',
-            defaultValue: false,
-            description: 'Skip Code Coverage Analysis (JaCoCo)'
-        )
-    }
-
-    environment {
-        JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-amd64'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
-    }
-
-    stages {
+    try {
 
         stage('Code Checkout') {
-            steps {
-                echo 'Checking out source code...'
 
-                checkout scm
+            deleteDir()
 
-                stash(
-                    name: 'source-code',
-                    includes: '**/*',
-                    useDefaultExcludes: false
-                )
+            echo 'Checking out source code...'
 
-                echo 'Source code checkout completed.'
-            }
+            checkout scm
+
+            echo 'Source code checkout completed.'
         }
 
         stage('Parallel Code Scans') {
 
-            parallel {
+            def parallelStages = [:]
 
-                stage('Code Stability') {
-                    when {
-                        expression {
-                            return !params.SKIP_STABILITY
-                        }
-                    }
+            if (!params.SKIP_STABILITY) {
 
-                    steps {
-                        dir('stability') {
+                parallelStages['Code Stability'] = {
 
-                            deleteDir()
+                    stage('Code Stability') {
 
-                            unstash 'source-code'
+                        echo 'Running Code Stability Scan using Checkstyle...'
 
-                            echo 'Running Code Stability Scan using Checkstyle...'
+                        sh '''
+                            echo "Java version:"
+                            java -version
 
-                            sh '''
-                                echo "Java version:"
-                                java -version
+                            echo "Maven version:"
+                            mvn -version
 
-                                echo "Maven version:"
-                                mvn -version
+                            mvn checkstyle:checkstyle
+                        '''
 
-                                mvn checkstyle:checkstyle
-                            '''
-
-                            echo 'Code Stability Scan completed.'
-                        }
-                    }
-                }
-
-                stage('Code Quality') {
-                    when {
-                        expression {
-                            return !params.SKIP_QUALITY
-                        }
-                    }
-
-                    steps {
-                        dir('quality') {
-
-                            deleteDir()
-
-                            unstash 'source-code'
-
-                            echo 'Running Code Quality Analysis using SonarQube...'
-
-                            /*
-                             * SonarQube Scanner requires Java 17+.
-                             * Java 21 is used for SonarQube.
-                             *
-                             * The project contains an old FindBugs
-                             * 3.0.5 plugin which is not compatible with
-                             * modern Java versions.
-                             *
-                             * Therefore FindBugs is skipped only during
-                             * the SonarQube analysis.
-                             */
-
-                            withEnv([
-                                'JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64',
-                                "PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:${env.PATH}"
-                            ]) {
-
-                                withSonarQubeEnv('SonarQube') {
-
-                                    sh '''
-                                        echo "Java version:"
-                                        java -version
-
-                                        echo "Maven version:"
-                                        mvn -version
-
-                                        mvn -DskipTests \
-                                        -Dfindbugs.skip=true \
-                                        compile \
-                                        org.sonarsource.scanner.maven:sonar-maven-plugin:3.10.0.2594:sonar \
-                                        -Dsonar.projectKey=spring3hibernate \
-                                        -Dsonar.projectName=spring3hibernate
-                                    '''
-                                }
-                            }
-
-                            echo 'Code Quality Analysis completed.'
-                        }
-                    }
-                }
-
-                stage('Code Coverage') {
-                    when {
-                        expression {
-                            return !params.SKIP_COVERAGE
-                        }
-                    }
-
-                    steps {
-                        dir('coverage') {
-
-                            deleteDir()
-
-                            unstash 'source-code'
-
-                            echo 'Running Code Coverage Analysis using JaCoCo...'
-
-                            sh '''
-                                echo "Java version:"
-                                java -version
-
-                                echo "Maven version:"
-                                mvn -version
-
-                                mvn clean \
-                                org.jacoco:jacoco-maven-plugin:0.8.13:prepare-agent \
-                                test \
-                                org.jacoco:jacoco-maven-plugin:0.8.13:report
-                            '''
-
-                            echo 'Code Coverage Analysis completed.'
-                        }
+                        echo 'Code Stability Scan completed.'
                     }
                 }
             }
+
+            if (!params.SKIP_QUALITY) {
+
+                parallelStages['Code Quality'] = {
+
+                    stage('Code Quality') {
+
+                        echo 'Running Code Quality Analysis using SonarQube...'
+
+                        withEnv([
+                            'JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64',
+                            "PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:${env.PATH}"
+                        ]) {
+
+                            withSonarQubeEnv('SonarQube') {
+
+                                sh '''
+                                    echo "Java version:"
+                                    java -version
+
+                                    echo "Maven version:"
+                                    mvn -version
+
+                                    mvn -DskipTests \
+                                    -Dfindbugs.skip=true \
+                                    compile \
+                                    org.sonarsource.scanner.maven:sonar-maven-plugin:3.10.0.2594:sonar \
+                                    -Dsonar.projectKey=spring3hibernate \
+                                    -Dsonar.projectName=spring3hibernate
+                                '''
+                            }
+                        }
+
+                        echo 'Code Quality Analysis completed.'
+                    }
+                }
+            }
+
+            if (!params.SKIP_COVERAGE) {
+
+                parallelStages['Code Coverage'] = {
+
+                    stage('Code Coverage') {
+
+                        echo 'Running Code Coverage Analysis using JaCoCo...'
+
+                        sh '''
+                            echo "Java version:"
+                            java -version
+
+                            echo "Maven version:"
+                            mvn -version
+
+                            mvn clean \
+                            org.jacoco:jacoco-maven-plugin:0.8.13:prepare-agent \
+                            test \
+                            org.jacoco:jacoco-maven-plugin:0.8.13:report
+                        '''
+
+                        echo 'Code Coverage Analysis completed.'
+                    }
+                }
+            }
+
+            if (parallelStages.isEmpty()) {
+                error('At least one code scan must be enabled.')
+            }
+
+            parallel parallelStages
         }
 
         stage('Generate Reports') {
-            steps {
 
-                echo 'Generating reports...'
+            echo 'Generating reports...'
 
-                junit(
-                    testResults: 'coverage/target/surefire-reports/*.xml',
-                    allowEmptyResults: true
-                )
+            junit(
+                testResults: 'target/surefire-reports/*.xml',
+                allowEmptyResults: true
+            )
 
-                publishHTML(
-                    target: [
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'stability/target/site',
-                        reportFiles: 'checkstyle.html',
-                        reportName: 'Checkstyle Report'
-                    ]
-                )
+            publishHTML(
+                target: [
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/site',
+                    reportFiles: 'checkstyle.html',
+                    reportName: 'Checkstyle Report'
+                ]
+            )
 
-                publishHTML(
-                    target: [
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'coverage/target/site/jacoco',
-                        reportFiles: 'index.html',
-                        reportName: 'JaCoCo Coverage Report'
-                    ]
-                )
+            publishHTML(
+                target: [
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/site/jacoco',
+                    reportFiles: 'index.html',
+                    reportName: 'JaCoCo Coverage Report'
+                ]
+            )
 
-                echo 'Reports generated successfully.'
-            }
+            echo 'Reports generated successfully.'
         }
 
         stage('Approval for Publication') {
-            steps {
 
-                echo 'Waiting for approval before publishing artifact...'
+            echo 'Waiting for approval before publishing artifact...'
 
-                input(
-                    message: 'Approve artifact publication?',
-                    ok: 'Approve'
-                )
+            input(
+                message: 'Approve artifact publication?',
+                ok: 'Approve'
+            )
 
-                echo 'Artifact publication approved.'
-            }
+            echo 'Artifact publication approved.'
         }
 
         stage('Publish Artifacts') {
-            steps {
 
-                dir('coverage') {
+            echo 'Building WAR artifact...'
 
-                    echo 'Building WAR artifact...'
+            sh '''
+                mvn package -DskipTests
+            '''
 
-                    sh '''
-                        mvn package -DskipTests
-                    '''
+            echo 'Publishing WAR artifact...'
 
-                    echo 'Publishing WAR artifact...'
+            archiveArtifacts(
+                artifacts: 'target/*.war',
+                fingerprint: true
+            )
 
-                    archiveArtifacts(
-                        artifacts: 'target/*.war',
-                        fingerprint: true
-                    )
-
-                    echo 'Artifact published successfully.'
-                }
-            }
-        }
-    }
-
-    post {
-
-        success {
-
-            echo '========================================'
-            echo 'PIPELINE SUCCESS'
             echo 'Artifact published successfully.'
-            echo '========================================'
+        }
 
-            emailext(
-                to: 'prajwaldekate6@gmail.com',
-                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """Build successful.
+        echo '========================================'
+        echo 'PIPELINE SUCCESS'
+        echo 'Artifact published successfully.'
+        echo '========================================'
+
+        emailext(
+            to: 'prajwaldekate6@gmail.com',
+            subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: """Build successful.
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Artifact: WAR published successfully.
 Build URL: ${env.BUILD_URL}
 """
-            )
-        }
+        )
 
-        failure {
+    } catch (err) {
 
-            echo '========================================'
-            echo 'PIPELINE FAILED'
-            echo 'Please check Jenkins console output.'
-            echo '========================================'
+        echo '========================================'
+        echo 'PIPELINE FAILED OR ABORTED'
+        echo '========================================'
 
-            emailext(
-                to: 'prajwaldekate6@gmail.com',
-                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """Build failed.
+        emailext(
+            to: 'prajwaldekate6@gmail.com',
+            subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: """Build failed or was aborted.
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Please check Jenkins console output.
 Build URL: ${env.BUILD_URL}
 """
-            )
-        }
+        )
 
-        aborted {
-
-            echo '========================================'
-            echo 'PIPELINE ABORTED'
-            echo '========================================'
-        }
+        throw err
     }
 }
