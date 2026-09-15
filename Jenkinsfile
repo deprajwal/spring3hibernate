@@ -1,23 +1,26 @@
 pipeline {
-    agent { label 'assignment-4-agent' }
+
+    agent {
+        label 'assignment-4-agent'
+    }
 
     parameters {
         booleanParam(
             name: 'SKIP_STABILITY',
             defaultValue: false,
-            description: 'Skip Code Stability scan'
+            description: 'Skip Code Stability Scan (Checkstyle)'
         )
 
         booleanParam(
             name: 'SKIP_QUALITY',
             defaultValue: false,
-            description: 'Skip Code Quality analysis'
+            description: 'Skip Code Quality Analysis (SonarQube)'
         )
 
         booleanParam(
             name: 'SKIP_COVERAGE',
             defaultValue: false,
-            description: 'Skip Code Coverage analysis'
+            description: 'Skip Code Coverage Analysis (JaCoCo)'
         )
     }
 
@@ -28,157 +31,315 @@ pipeline {
 
     stages {
 
+        /*
+         * ============================================================
+         * 1. CODE CHECKOUT
+         * ============================================================
+         */
         stage('Code Checkout') {
             steps {
+                echo 'Checking out source code...'
+
                 checkout scm
-                stash name: 'source-code', includes: '**/*', useDefaultExcludes: false
+
+                stash(
+                    name: 'source-code',
+                    includes: '**/*',
+                    useDefaultExcludes: false
+                )
+
+                echo 'Source code checkout completed.'
             }
         }
 
+
+        /*
+         * ============================================================
+         * 2. PARALLEL CODE SCANS
+         * ============================================================
+         */
         stage('Parallel Code Scans') {
+
             parallel {
 
+                /*
+                 * ----------------------------------------------------
+                 * CODE STABILITY - CHECKSTYLE
+                 * ----------------------------------------------------
+                 */
                 stage('Code Stability') {
+
                     when {
                         expression {
-                            !params.SKIP_STABILITY
+                            return !params.SKIP_STABILITY
                         }
                     }
 
                     steps {
+
                         dir('stability') {
+
                             deleteDir()
+
                             unstash 'source-code'
 
-                            echo 'Running Code Stability scan...'
+                            echo 'Running Code Stability Scan using Checkstyle...'
 
                             sh '''
+                                java -version
+                                mvn -version
+
                                 mvn checkstyle:checkstyle
                             '''
+
+                            echo 'Code Stability Scan completed.'
                         }
                     }
                 }
 
+
+                /*
+                 * ----------------------------------------------------
+                 * CODE QUALITY - SONARQUBE
+                 * ----------------------------------------------------
+                 */
                 stage('Code Quality') {
+
                     when {
                         expression {
-                            !params.SKIP_QUALITY
+                            return !params.SKIP_QUALITY
                         }
                     }
 
                     steps {
+
                         dir('quality') {
+
                             deleteDir()
+
                             unstash 'source-code'
 
-                            echo 'Running SonarQube Code Quality analysis...'
+                            echo 'Running Code Quality Analysis using SonarQube...'
 
                             withEnv([
                                 'JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64',
-                                'PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+                                'PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:' + env.PATH
                             ]) {
+
                                 withSonarQubeEnv('SonarQube') {
+
                                     sh '''
+                                        java -version
+                                        mvn -version
+
                                         mvn -DskipTests \
-                                           -Dsonar.projectKey=spring3hibernate \
-                                           -Dsonar.projectName=spring3hibernate \
-                                           sonar:sonar
+                                        compile \
+                                        org.sonarsource.scanner.maven:sonar-maven-plugin:3.10.0.2594:sonar \
+                                        -Dsonar.projectKey=spring3hibernate \
+                                        -Dsonar.projectName=spring3hibernate
                                     '''
                                 }
                             }
+
+                            echo 'Code Quality Analysis completed.'
                         }
                     }
                 }
 
+
+                /*
+                 * ----------------------------------------------------
+                 * CODE COVERAGE - JACOCO
+                 * ----------------------------------------------------
+                 */
                 stage('Code Coverage') {
+
                     when {
                         expression {
-                            !params.SKIP_COVERAGE
+                            return !params.SKIP_COVERAGE
                         }
                     }
 
                     steps {
+
                         dir('coverage') {
+
                             deleteDir()
+
                             unstash 'source-code'
 
-                            echo 'Running JaCoCo Code Coverage analysis...'
+                            echo 'Running Code Coverage Analysis using JaCoCo...'
 
                             sh '''
+                                java -version
+                                mvn -version
+
                                 mvn clean \
-                                   org.jacoco:jacoco-maven-plugin:0.8.13:prepare-agent \
-                                   test \
-                                   org.jacoco:jacoco-maven-plugin:0.8.13:report
+                                org.jacoco:jacoco-maven-plugin:0.8.13:prepare-agent \
+                                test \
+                                org.jacoco:jacoco-maven-plugin:0.8.13:report
                             '''
+
+                            echo 'Code Coverage Analysis completed.'
                         }
                     }
                 }
             }
         }
 
-        stage('Generate Reports') {
-            steps {
-                echo 'Publishing reports...'
 
+        /*
+         * ============================================================
+         * 3. GENERATE REPORTS
+         * ============================================================
+         */
+        stage('Generate Reports') {
+
+            steps {
+
+                echo 'Generating reports...'
+
+                /*
+                 * JUnit Test Report
+                 */
                 junit(
                     testResults: 'coverage/target/surefire-reports/*.xml',
                     allowEmptyResults: true
                 )
 
-                publishHTML([
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'stability/target/site',
-                    reportFiles: 'checkstyle.html',
-                    reportName: 'Checkstyle Report'
-                ])
+                /*
+                 * Checkstyle Report
+                 */
+                publishHTML(
+                    target: [
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'stability/target/site',
+                        reportFiles: 'checkstyle.html',
+                        reportName: 'Checkstyle Report'
+                    ]
+                )
 
-                publishHTML([
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'coverage/target/site/jacoco',
-                    reportFiles: 'index.html',
-                    reportName: 'JaCoCo Coverage Report'
-                ])
+                /*
+                 * JaCoCo Coverage Report
+                 */
+                publishHTML(
+                    target: [
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'coverage/target/site/jacoco',
+                        reportFiles: 'index.html',
+                        reportName: 'JaCoCo Coverage Report'
+                    ]
+                )
+
+                echo 'Reports generated successfully.'
             }
         }
 
+
+        /*
+         * ============================================================
+         * 4. APPROVAL BEFORE PUBLICATION
+         * ============================================================
+         */
         stage('Approval for Publication') {
+
             steps {
+
+                echo 'Waiting for approval before publishing artifact...'
+
                 input(
                     message: 'Approve artifact publication?',
                     ok: 'Approve'
                 )
+
+                echo 'Artifact publication approved.'
             }
         }
 
+
+        /*
+         * ============================================================
+         * 5. PUBLISH ARTIFACT
+         * ============================================================
+         */
         stage('Publish Artifacts') {
+
             steps {
+
                 dir('coverage') {
-                    sh 'mvn package -DskipTests'
+
+                    echo 'Building WAR artifact...'
+
+                    sh '''
+                        mvn package -DskipTests
+                    '''
+
+                    echo 'Publishing WAR artifact...'
 
                     archiveArtifacts(
                         artifacts: 'target/*.war',
                         fingerprint: true
                     )
+
+                    echo 'Artifact published successfully.'
                 }
             }
         }
     }
 
+
+    /*
+     * ================================================================
+     * POST BUILD NOTIFICATIONS
+     * ================================================================
+     */
     post {
+
         success {
-            echo 'Pipeline completed successfully.'
+
+            echo '========================================'
+            echo 'PIPELINE SUCCESS'
+            echo 'Artifact published successfully.'
+            echo '========================================'
+
+            /*
+             * Slack notification will be added here
+             * after Slack configuration.
+             */
+
+            /*
+             * Email notification will be added here
+             * after SMTP configuration.
+             */
         }
 
         failure {
-            echo 'Pipeline failed.'
+
+            echo '========================================'
+            echo 'PIPELINE FAILED'
+            echo 'Please check Jenkins console output.'
+            echo '========================================'
+
+            /*
+             * Slack notification will be added here
+             * after Slack configuration.
+             */
+
+            /*
+             * Email notification will be added here
+             * after SMTP configuration.
+             */
         }
 
         aborted {
-            echo 'Pipeline aborted / publication denied.'
+
+            echo '========================================'
+            echo 'PIPELINE ABORTED'
+            echo '========================================'
         }
     }
 }
