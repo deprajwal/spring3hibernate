@@ -269,30 +269,49 @@ pipeline {
         }
     }
 
-
+    
     post {
+    success {
+        echo '========================================'
+        echo 'PIPELINE SUCCESS'
+        echo 'Artifact published successfully.'
+        echo '========================================'
 
-        success {
+        emailext(
+            to: 'prajwaldekate6@gmail.com',
+            subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: """Build successful.
 
-            echo '========================================'
-            echo 'PIPELINE SUCCESS'
-            echo 'Artifact published successfully.'
-            echo '========================================'
-        }
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Artifact: WAR published successfully.
+Build URL: ${env.BUILD_URL}
+"""
+        )
+    }
 
-        failure {
+    failure {
+        echo '========================================'
+        echo 'PIPELINE FAILED'
+        echo 'Please check Jenkins console output.'
+        echo '========================================'
 
-            echo '========================================'
-            echo 'PIPELINE FAILED'
-            echo 'Please check Jenkins console output.'
-            echo '========================================'
-        }
+        emailext(
+            to: 'prajwaldekate6@gmail.com',
+            subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: """Build failed.
 
-        aborted {
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Please check Jenkins console output.
+Build URL: ${env.BUILD_URL}
+"""
+        )
+    }
 
-            echo '========================================'
-            echo 'PIPELINE ABORTED'
-            echo '========================================'
-        }
+    aborted {
+        echo '========================================'
+        echo 'PIPELINE ABORTED'
+        echo '========================================'
     }
 }
