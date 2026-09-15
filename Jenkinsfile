@@ -5,6 +5,7 @@ pipeline {
     }
 
     parameters {
+
         booleanParam(
             name: 'SKIP_STABILITY',
             defaultValue: false,
@@ -25,19 +26,22 @@ pipeline {
     }
 
     environment {
+
         JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-amd64'
+
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
     stages {
 
-        /*
-         * ============================================================
-         * 1. CODE CHECKOUT
-         * ============================================================
-         */
+        // ============================================================
+        // 1. CODE CHECKOUT
+        // ============================================================
+
         stage('Code Checkout') {
+
             steps {
+
                 echo 'Checking out source code...'
 
                 checkout scm
@@ -53,23 +57,22 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * 2. PARALLEL CODE SCANS
-         * ============================================================
-         */
+        // ============================================================
+        // 2. PARALLEL CODE SCANS
+        // ============================================================
+
         stage('Parallel Code Scans') {
 
             parallel {
 
-                /*
-                 * ----------------------------------------------------
-                 * CODE STABILITY - CHECKSTYLE
-                 * ----------------------------------------------------
-                 */
+                // ----------------------------------------------------
+                // CODE STABILITY - CHECKSTYLE
+                // ----------------------------------------------------
+
                 stage('Code Stability') {
 
                     when {
+
                         expression {
                             return !params.SKIP_STABILITY
                         }
@@ -86,7 +89,10 @@ pipeline {
                             echo 'Running Code Stability Scan using Checkstyle...'
 
                             sh '''
+                                echo "Java version:"
                                 java -version
+
+                                echo "Maven version:"
                                 mvn -version
 
                                 mvn checkstyle:checkstyle
@@ -98,14 +104,14 @@ pipeline {
                 }
 
 
-                /*
-                 * ----------------------------------------------------
-                 * CODE QUALITY - SONARQUBE
-                 * ----------------------------------------------------
-                 */
+                // ----------------------------------------------------
+                // CODE QUALITY - SONARQUBE
+                // ----------------------------------------------------
+
                 stage('Code Quality') {
 
                     when {
+
                         expression {
                             return !params.SKIP_QUALITY
                         }
@@ -121,15 +127,24 @@ pipeline {
 
                             echo 'Running Code Quality Analysis using SonarQube...'
 
+                            /*
+                             * Java 11 is used here because the project
+                             * contains an old FindBugs plugin which has
+                             * compatibility issues with Java 21.
+                             */
+
                             withEnv([
-                                'JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64',
-                                'PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:' + env.PATH
+                                'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64',
+                                "PATH=/usr/lib/jvm/java-11-openjdk-amd64/bin:${env.PATH}"
                             ]) {
 
                                 withSonarQubeEnv('SonarQube') {
 
                                     sh '''
+                                        echo "Java version:"
                                         java -version
+
+                                        echo "Maven version:"
                                         mvn -version
 
                                         mvn -DskipTests \
@@ -147,14 +162,14 @@ pipeline {
                 }
 
 
-                /*
-                 * ----------------------------------------------------
-                 * CODE COVERAGE - JACOCO
-                 * ----------------------------------------------------
-                 */
+                // ----------------------------------------------------
+                // CODE COVERAGE - JACOCO
+                // ----------------------------------------------------
+
                 stage('Code Coverage') {
 
                     when {
+
                         expression {
                             return !params.SKIP_COVERAGE
                         }
@@ -171,7 +186,10 @@ pipeline {
                             echo 'Running Code Coverage Analysis using JaCoCo...'
 
                             sh '''
+                                echo "Java version:"
                                 java -version
+
+                                echo "Maven version:"
                                 mvn -version
 
                                 mvn clean \
@@ -188,28 +206,31 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * 3. GENERATE REPORTS
-         * ============================================================
-         */
+        // ============================================================
+        // 3. GENERATE REPORTS
+        // ============================================================
+
         stage('Generate Reports') {
 
             steps {
 
                 echo 'Generating reports...'
 
-                /*
-                 * JUnit Test Report
-                 */
+
+                // ----------------------------------------------------
+                // JUNIT TEST REPORT
+                // ----------------------------------------------------
+
                 junit(
                     testResults: 'coverage/target/surefire-reports/*.xml',
                     allowEmptyResults: true
                 )
 
-                /*
-                 * Checkstyle Report
-                 */
+
+                // ----------------------------------------------------
+                // CHECKSTYLE REPORT
+                // ----------------------------------------------------
+
                 publishHTML(
                     target: [
                         allowMissing: true,
@@ -221,9 +242,11 @@ pipeline {
                     ]
                 )
 
-                /*
-                 * JaCoCo Coverage Report
-                 */
+
+                // ----------------------------------------------------
+                // JACOCO REPORT
+                // ----------------------------------------------------
+
                 publishHTML(
                     target: [
                         allowMissing: true,
@@ -240,11 +263,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * 4. APPROVAL BEFORE PUBLICATION
-         * ============================================================
-         */
+        // ============================================================
+        // 4. APPROVAL BEFORE PUBLICATION
+        // ============================================================
+
         stage('Approval for Publication') {
 
             steps {
@@ -261,11 +283,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * 5. PUBLISH ARTIFACT
-         * ============================================================
-         */
+        // ============================================================
+        // 5. PUBLISH ARTIFACT
+        // ============================================================
+
         stage('Publish Artifacts') {
 
             steps {
@@ -292,11 +313,10 @@ pipeline {
     }
 
 
-    /*
-     * ================================================================
-     * POST BUILD NOTIFICATIONS
-     * ================================================================
-     */
+    // ================================================================
+    // POST BUILD ACTIONS
+    // ================================================================
+
     post {
 
         success {
@@ -307,15 +327,14 @@ pipeline {
             echo '========================================'
 
             /*
-             * Slack notification will be added here
-             * after Slack configuration.
+             * Slack notification will be configured later.
              */
 
             /*
-             * Email notification will be added here
-             * after SMTP configuration.
+             * Email notification will be configured later.
              */
         }
+
 
         failure {
 
@@ -325,15 +344,14 @@ pipeline {
             echo '========================================'
 
             /*
-             * Slack notification will be added here
-             * after Slack configuration.
+             * Slack notification will be configured later.
              */
 
             /*
-             * Email notification will be added here
-             * after SMTP configuration.
+             * Email notification will be configured later.
              */
         }
+
 
         aborted {
 
