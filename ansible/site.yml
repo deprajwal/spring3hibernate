@@ -1,0 +1,22 @@
+---
+- name: Assignment 6 Ansible Playbook Execution
+  hosts: all
+  become: false
+
+  tasks:
+
+    - name: Display execution environment
+      debug:
+        msg: "Running Ansible playbook in {{ environment }} environment"
+
+    - name: Display code base path
+      debug:
+        msg: "Code base path: {{ code_base_path }}"
+
+    - name: Display action message
+      debug:
+        msg: "{{ action_message }}"
+
+    - name: Verify Ansible execution
+      debug:
+        msg: "Ansible playbook executed successfully"
